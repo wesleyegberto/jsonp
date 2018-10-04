@@ -19,6 +19,9 @@ package org.glassfish.json.tests;
 import junit.framework.TestCase;
 
 import javax.json.*;
+
+import java.math.BigInteger;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -85,6 +88,73 @@ public class JsonBuilderTest extends TestCase {
         assertTrue(number.isIntegral());
         JsonObjectTest.testPerson(copyPerson);
     }
+
+    public void testObjectBuilderThrowingNpeAsDefaultBehavior() {
+    	try {
+	    	Json.createObjectBuilder()
+	    		.add("firstName", "John")
+	    		.add("lastName", (String) null)
+	    		.build();
+	        fail("JsonObjectBuilder#add() should throw NullPointerException when value is null and it forbids null");
+	    } catch(NullPointerException e) {
+	        // Expected
+	    }
+    	
+    	try {
+	    	Json.createObjectBuilder()
+	    		.forbidNull()
+	    		.add("firstName", "John")
+	    		.add("lastName", (String) null)
+	    		.build();
+	        fail("JsonObjectBuilder#add() should throw NullPointerException when value is null and it forbids null");
+	    } catch(NullPointerException e) {
+	        // Expected
+	    }
+    }
+
+    public void testObjectBuilderIgnoringNullValue() {
+    	JsonObjectBuilder builder = Json.createObjectBuilder()
+			.ignoreNull();
+    	
+		JsonObject person = addPersonFieldsWithNullValues(builder);
+		
+    	assertEquals("John", person.getString("firstName"));
+    	assertFalse(person.containsKey("lastName"));
+		assertFalse(person.containsKey("age"));
+		assertFalse(person.containsKey("address"));
+		assertFalse(person.containsKey("weight"));
+		assertFalse(person.containsKey("nickname"));
+    }
+
+    public void testObjectBuilderSerializingNullValue() {
+    	JsonObjectBuilder builder = Json.createObjectBuilder()
+			.serializeNull();
+		JsonObject person = addPersonFieldsWithNullValues(builder);
+		
+    	assertEquals("John", person.getString("firstName"));
+    	assertThatExistsAndIsNull(person, "lastName");
+    	assertThatExistsAndIsNull(person, "age");
+    	assertThatExistsAndIsNull(person, "address");
+    	assertThatExistsAndIsNull(person, "weight");
+    	assertThatExistsAndIsNull(person, "nickname");
+    }
+
+	private JsonObject addPersonFieldsWithNullValues(JsonObjectBuilder builder) {
+		return builder
+    		.add("firstName", "John")
+    		.add("lastName", (String) null)
+    		.add("age", (BigInteger) null)
+    		.add("address", (JsonObjectBuilder) null)
+    		.add("weight", (BigDecimal) null)
+    		.add("phoneNumbers", (JsonArrayBuilder) null)
+    		.add("nickname", (JsonValue) null)
+    		.build();
+	}
+
+	private void assertThatExistsAndIsNull(JsonObject person, String key) {
+		assertTrue(person.containsKey(key));
+    	assertTrue(person.isNull(key));
+	}   
 
     static Map<String, Object> buildPersonAsMap() {
         Map<String, Object> person = new HashMap<>();

@@ -20,10 +20,13 @@ import org.glassfish.json.api.BufferPool;
 
 import javax.json.JsonArrayBuilder;
 import javax.json.*;
+import javax.json.serialization.NullValueSerializationBehavior;
+
 import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.*;
+import java.util.function.Function;
 
 /**
  * JsonObjectBuilder implementation
@@ -32,10 +35,11 @@ import java.util.*;
  * @author Kin-man Chung
  */
 class JsonObjectBuilderImpl implements JsonObjectBuilder {
-
+	private NullValueSerializationBehavior nullValueSerializationBehavior = NullValueSerializationBehavior.FORBIDDEN;
+	
     private Map<String, JsonValue> valueMap;
     private final BufferPool bufferPool;
-
+	
     JsonObjectBuilderImpl(BufferPool bufferPool) {
         this.bufferPool = bufferPool;
     }
@@ -53,8 +57,32 @@ class JsonObjectBuilderImpl implements JsonObjectBuilder {
     }
 
     @Override
+	public JsonObjectBuilder forbidNull() {
+    	this.nullValueSerializationBehavior = NullValueSerializationBehavior.FORBIDDEN;
+    	return this;
+	}
+
+    @Override
+	public JsonObjectBuilder serializeNull() {
+    	this.nullValueSerializationBehavior = NullValueSerializationBehavior.SERIALIZE;
+    	return this;
+	}
+
+    @Override
+	public JsonObjectBuilder ignoreNull() {
+    	this.nullValueSerializationBehavior = NullValueSerializationBehavior.IGNORE;
+    	return this;
+	}
+
+    @Override
     public JsonObjectBuilder add(String name, JsonValue value) {
         validateName(name);
+    	if (shouldIgnore(value)) {
+    		return this;
+    	}
+    	if (shouldAddNull(value)) {
+    		return addNull(name);
+    	}
         validateValue(value);
         putValueMap(name, value);
         return this;
@@ -63,6 +91,13 @@ class JsonObjectBuilderImpl implements JsonObjectBuilder {
     @Override
     public JsonObjectBuilder add(String name, String value) {
         validateName(name);
+        // return handleAndAddValue(name, value, JsonStringImpl::new);
+    	if (shouldIgnore(value)) {
+    		return this;
+    	}
+    	if (shouldAddNull(value)) {
+    		return addNull(name);
+    	}
         validateValue(value);
         putValueMap(name, new JsonStringImpl(value));
         return this;
@@ -71,6 +106,12 @@ class JsonObjectBuilderImpl implements JsonObjectBuilder {
     @Override
     public JsonObjectBuilder add(String name, BigInteger value) {
         validateName(name);
+    	if (shouldIgnore(value)) {
+    		return this;
+    	}
+    	if (shouldAddNull(value)) {
+    		return addNull(name);
+    	}
         validateValue(value);
         putValueMap(name, JsonNumberImpl.getJsonNumber(value));
         return this;
@@ -79,6 +120,12 @@ class JsonObjectBuilderImpl implements JsonObjectBuilder {
     @Override
     public JsonObjectBuilder add(String name, BigDecimal value) {
         validateName(name);
+    	if (shouldIgnore(value)) {
+    		return this;
+    	}
+    	if (shouldAddNull(value)) {
+    		return addNull(name);
+    	}
         validateValue(value);
         putValueMap(name, JsonNumberImpl.getJsonNumber(value));
         return this;
@@ -122,7 +169,13 @@ class JsonObjectBuilderImpl implements JsonObjectBuilder {
     @Override
     public JsonObjectBuilder add(String name, JsonObjectBuilder builder) {
         validateName(name);
-        if (builder == null) {
+    	if (shouldIgnore(builder)) {
+    		return this;
+    	}
+    	if (shouldAddNull(builder)) {
+    		return addNull(name);
+    	}
+        if (isNullForbidden() && builder == null) {
             throw new NullPointerException(JsonMessages.OBJBUILDER_OBJECT_BUILDER_NULL());
         }
         putValueMap(name, builder.build());
@@ -131,8 +184,14 @@ class JsonObjectBuilderImpl implements JsonObjectBuilder {
 
     @Override
     public JsonObjectBuilder add(String name, JsonArrayBuilder builder) {
-        validateName(name);
-        if (builder == null) {
+    	validateName(name);
+    	if (shouldIgnore(builder)) {
+    		return this;
+    	}
+    	if (shouldAddNull(builder)) {
+    		return addNull(name);
+    	}
+        if (isNullForbidden() && builder == null) {
             throw new NullPointerException(JsonMessages.OBJBUILDER_ARRAY_BUILDER_NULL());
         }
         putValueMap(name, builder.build());
@@ -194,9 +253,42 @@ class JsonObjectBuilderImpl implements JsonObjectBuilder {
     }
 
     private void validateValue(Object value) {
-        if (value == null) {
+        if (isNullForbidden() && value == null) {
             throw new NullPointerException(JsonMessages.OBJBUILDER_VALUE_NULL());
         }
+    }
+    
+    private boolean shouldIgnore(Object value) {
+    	return nullValueSerializationBehavior == NullValueSerializationBehavior.IGNORE && value == null;
+    }
+    
+    private boolean shouldAddNull(Object value) {
+    	return nullValueSerializationBehavior == NullValueSerializationBehavior.SERIALIZE && value == null;
+    }
+
+	private boolean isNullForbidden() {
+		return nullValueSerializationBehavior == NullValueSerializationBehavior.FORBIDDEN;
+	}
+    
+    // TODO: Verify if we can use Lambda (thus requiring JDK >= 8)
+    private <T, R extends JsonValue> JsonObjectBuilder handleAndAddValue(String name, T value, Function<T, R> valueTransformer) {
+    	JsonValue valueToAdd = null;
+    	
+    	if (value == null) {
+    		switch (nullValueSerializationBehavior) {
+    			case IGNORE:
+    				return this;
+    			case SERIALIZE:
+					valueToAdd = JsonValue.NULL;
+					break;
+    			default:
+    				throw new NullPointerException(JsonMessages.OBJBUILDER_VALUE_NULL());
+    		}
+    	} else {
+			valueToAdd = valueTransformer.apply(value);
+    	}
+    	putValueMap(name, valueToAdd);
+    	return this;
     }
 
     private static final class JsonObjectImpl extends AbstractMap<String, JsonValue> implements JsonObject {

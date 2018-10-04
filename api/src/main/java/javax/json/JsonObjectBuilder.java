@@ -86,12 +86,38 @@ import java.math.BigInteger;
  * </code>
  * </pre>
  *
- * <p>This class does <em>not</em> allow <tt>null</tt> to be used as a name or
- * value while building the JSON object
+ * <p>By default, this class does <em>not</em> allow <tt>null</tt> to be used as a name or
+ * value while building the JSON object. But it can be configured to allow and serialize null
+ * value using {@link JsonObjectBuilder#serializeNull()} or to just ignore it using
+ * {@link JsonObjectBuilder#ignoreNull()}.
  *
  * @see JsonArrayBuilder
  */
 public interface JsonObjectBuilder {
+	/**
+	 * Define the behavior to throw a NullPointerException when
+	 * the received value is <code>null</code>.
+	 * This is the default behavior.
+	 */
+	default JsonObjectBuilder forbidNull() {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	 * Define the behavior to serialize the
+	 * the received value as <code>JsonValue.NULL</code>.
+	 */
+	default JsonObjectBuilder serializeNull() {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	 * Define the behavior to ignore the value when
+	 * it is <code>null</code>.
+	 */
+	default JsonObjectBuilder ignoreNull() {
+		throw new UnsupportedOperationException();
+	}
 
     /**
      * Adds a name/{@code JsonValue} pair to the JSON object associated with
